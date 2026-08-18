@@ -12,10 +12,15 @@ Systematic Long Options research platform.
 ## Architecture
 Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest -> Optimization -> Paper Trading -> MCP
 
+## Data providers
+- Mock provider for development
+- **Upstox read-only provider** for real market data
+- **Groww read-only provider** for real market data and historical F&O research
+
+Groww's documented APIs provide live quotes, option chains with Greeks, and F&O historical backtesting data through expiry -> contract -> historical-candle APIs. F&O historical data is documented from 2020 onward. citeturn225452view0turn225452view1
+
 ## Current implementation
 - Market/option models
-- Mock market-data provider
-- **Real Upstox market-data provider (read-only)**
 - Black-Scholes option pricing
 - Delta, Gamma, Theta, Vega
 - Implied-volatility solver
@@ -34,48 +39,58 @@ Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest 
 - Parameter grid optimization
 - Walk-forward and robustness utilities
 - Paper trading ledger/service/reporting
-- **Real-data paper scan runner**
-- **Real-data paper loop, 09:15-15:30 IST**
+- Real-data paper scan runner
+- Real-data paper loop, 09:15-15:30 IST
+- Provider factory for mock/upstox/groww
 - MCP application facade
 
-## Real-data setup
-The current real-data adapter uses Upstox REST APIs for the option chain and market quotes. TradingView remains useful for visual analysis, but its official documentation says it does not currently provide a general API for programmatic data access.
-
-Create an Upstox developer app and obtain an access token. Upstox uses OAuth 2.0, and its access tokens expire at 3:30 AM the following day.
-
-Copy `.env.example` to `.env` and configure:
-
+## Upstox real-data setup
 ```bash
 DATA_PROVIDER=upstox
 UPSTOX_ACCESS_TOKEN=YOUR_TOKEN
 SLO_UNDERLYING_KEYS={"NIFTY":"NSE_INDEX|Nifty 50","BANKNIFTY":"NSE_INDEX|Nifty Bank"}
-SLO_LOT_SIZES={"NIFTY":1,"BANKNIFTY":1}
 ```
 
-## Run a real-data paper scan
+## Groww real-data setup
+Groww's current API documentation describes access-token authentication and a read-only live-data/option-chain flow. The access token is generated from Groww's Trading APIs area and expires daily at 6:00 AM. citeturn325644search4
 
+```bash
+DATA_PROVIDER=groww
+GROWW_ACCESS_TOKEN=YOUR_TOKEN
+SLO_GROWW_UNDERLYING_SYMBOLS={"NIFTY":"NIFTY","BANKNIFTY":"BANKNIFTY"}
+```
+
+Do not commit real tokens or `.env` to GitHub.
+
+## Paper account
+```bash
+SLO_PAPER_CAPITAL=1500000
+SLO_PAPER_TRADE_ALLOCATION=150000
+SLO_PAPER_INTERVAL_SECONDS=300
+```
+
+The current paper test allocates up to ₹1.5 lakh to a selected trade from a ₹15 lakh paper account, subject to whole-lot sizing. Stop-loss risk is reported separately.
+
+## Run a real-data paper scan
 ```bash
 python -m slo_options.paper.real_scan
 ```
 
-or, after installation:
+or:
 
 ```bash
 slo-paper-scan
 ```
 
-The scanner writes `reports/paper_signals.csv` and **does not place any orders**.
-
 ## Run continuous paper trading
-
 ```bash
 slo-paper-loop
 ```
 
-The loop uses real market data but never sends broker orders. It runs only during the NSE market window **09:15-15:30 IST**, does not open new positions after 15:30, and closes remaining paper positions at end of day using the latest available bid.
+The loop uses the configured read-only provider and never sends broker orders. It runs only during the NSE market window **09:15-15:30 IST**, does not open new positions after 15:30, and closes remaining paper positions at end of day using the latest available bid.
 
-## Historical data
-Upstox also exposes expired option contracts and expired historical candles, which gives us a path toward real option-history backtesting.
+## Historical option research with Groww
+Groww documents an expiry -> contract -> historical candle workflow for F&O options, including CE/PE contract symbols and historical candles. This will be used to build the real option-history backtest dataset rather than relying on synthetic data. citeturn225452view1
 
 ## Local setup
 ```bash
