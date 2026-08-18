@@ -42,8 +42,9 @@ def scan_once(output: str | Path = "reports/paper_signals.csv") -> list[dict]:
 
         selected = None
         for analytics, score in candidates:
-            selected = select_trade(direction.direction, analytics, score)
-            if selected.signal.value != "NO_TRADE":
+            candidate = select_trade(direction.direction, analytics, score)
+            if candidate.signal.value != "NO_TRADE":
+                selected = candidate
                 break
 
         row = {
@@ -65,6 +66,19 @@ def scan_once(output: str | Path = "reports/paper_signals.csv") -> list[dict]:
 
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
-    frame = pd.DataFrame(rows)
-    frame.to_csv(path, index=False)
+    pd.DataFrame(rows).to_csv(path, index=False)
     return rows
+
+
+def main() -> None:
+    rows = scan_once()
+    for row in rows:
+        print(
+            f"{row['underlying']}: {row['signal']} "
+            f"score={row['direction_score']:.1f} "
+            f"option={row['option_symbol']} entry={row['entry_premium']}"
+        )
+
+
+if __name__ == "__main__":
+    main()
