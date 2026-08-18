@@ -2,26 +2,37 @@
 
 Systematic Long Options research platform.
 
-Scope:
+## Strategy scope
 - Long CALL / Long PUT only
 - No option selling
 - NIFTY + BANKNIFTY + liquid F&O stocks
-- Strategy, risk, backtesting and MCP layers will be added incrementally
+- Target: research toward an average ₹10K/day objective; no forced daily trading quota
+- Historical validation -> one-month forward paper trading -> small live deployment only after validation
 
-Current milestone:
-- Market data models
-- Provider abstraction
-- Mock provider
-- Black-Scholes pricing
-- Greeks
-- IV solver
-- HV and IV/HV
+## Architecture
+Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest -> MCP
+
+## Current implementation
+- Market/option models
+- Market-data provider abstraction
+- Mock provider for development
+- Black-Scholes option pricing
+- Delta, Gamma, Theta, Vega
+- Implied-volatility solver
+- Historical volatility and IV/HV
 - Expected move
-- Liquidity filters
+- Breakeven
+- Liquidity filtering
 - Candidate scoring
+- Initial CLI scanner
 
-Install:
+## Local setup
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
+```
+
+## Important
+This repository is for research, backtesting and paper trading. It does not place live orders.
