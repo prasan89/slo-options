@@ -24,7 +24,10 @@ Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest 
 - Breakeven
 - Liquidity filtering
 - Candidate scoring
-- Initial CLI scanner
+- V1 directional score
+- Long-only CALL/PUT selector
+- Entry stop/target calculation
+- Unit tests for direction and signal selection
 
 ## Local setup
 ```bash
