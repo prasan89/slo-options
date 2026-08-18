@@ -10,7 +10,7 @@ Systematic Long Options research platform.
 - Historical validation -> one-month forward paper trading -> small live deployment only after validation
 
 ## Architecture
-Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest -> MCP
+Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest -> Optimization -> Paper Trading -> MCP
 
 ## Current implementation
 - Market/option models
@@ -27,7 +27,16 @@ Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest 
 - V1 directional score
 - Long-only CALL/PUT selector
 - Entry stop/target calculation
-- Unit tests for direction and signal selection
+- Risk limits and position sizing
+- Backtesting engine
+- Slippage/commission model
+- P&L, drawdown and trade metrics
+- Parameter grid optimization
+- Walk-forward and robustness utilities
+- Paper trading ledger
+- Paper trading service
+- Paper performance report
+- MCP application facade
 
 ## Local setup
 ```bash
