@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "slo-options"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["numpy>=2.0", "pandas>=2.2", "scipy>=1.13", "pydantic>=2.7"]
+dependencies = ["numpy>=2.0", "pandas>=2.2", "scipy>=1.13", "pydantic>=2.7", "requests>=2.32"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
@@ -14,6 +14,7 @@ mcp = ["mcp>=1.0"]
 
 [project.scripts]
 slo-scan = "slo_options.cli:main"
+slo-paper-scan = "slo_options.paper.real_scan:scan_once"
 
 [tool.setuptools.packages.find]
 where = ["src"]
