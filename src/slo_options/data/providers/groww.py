@@ -79,7 +79,6 @@ class GrowwMarketDataProvider(MarketDataProvider):
         for expiry in expiries:
             if expiry >= today:
                 return datetime.combine(expiry, datetime.min.time())
-        # Fall through to the next calendar month if this month's list is exhausted.
         next_month = today.month + 1
         next_year = today.year
         if next_month == 13:
@@ -90,33 +89,23 @@ class GrowwMarketDataProvider(MarketDataProvider):
                 return datetime.combine(expiry, datetime.min.time())
         raise RuntimeError(f"No future Groww expiry found for {underlying}")
 
-    def get_option_chain(
-        self,
-        underlying: str,
-        expiry: datetime | None = None,
-    ) -> list[OptionQuote]:
+    def get_option_chain(self, underlying: str, expiry: datetime | None = None) -> list[OptionQuote]:
         expiry = expiry or self._nearest_expiry(underlying)
-
         payload = self._request(
             f"/option-chain/exchange/NSE/underlying/{self._underlying_symbol(underlying)}",
             {"expiry_date": expiry.date().isoformat()},
         )
         data = payload.get("payload", {})
-
         options: list[OptionQuote] = []
+
         for strike_text, strike_data in (data.get("strikes") or {}).items():
             strike = float(strike_text)
             for option_type, code in ((OptionType.CALL, "CE"), (OptionType.PUT, "PE")):
                 contract = (strike_data or {}).get(code) or {}
-                if not contract:
-                    continue
                 trading_symbol = contract.get("trading_symbol")
                 if not trading_symbol:
                     continue
 
-                # The option-chain endpoint documents LTP/OI/volume/Greeks but
-                # not the complete bid/ask pair. Fetch the individual quote for
-                # execution prices used by the paper engine.
                 quote_payload = self._request(
                     "/live-data/quote",
                     {"exchange": "NSE", "segment": "FNO", "trading_symbol": trading_symbol},
@@ -127,8 +116,6 @@ class GrowwMarketDataProvider(MarketDataProvider):
                 ask = float(market.get("offer_price", 0) or 0)
                 ltp = float(contract.get("ltp", market.get("last_price", 0)) or 0)
                 if bid <= 0 or ask <= 0:
-                    # Do not manufacture a spread from LTP. Realistic paper
-                    # execution requires an actual two-sided quote.
                     continue
 
                 iv = greeks.get("iv")
@@ -180,12 +167,13 @@ class GrowwMarketDataProvider(MarketDataProvider):
         start_time: datetime,
         end_time: datetime,
         candle_interval: str = "15minute",
+        segment: str = "FNO",
     ) -> list[list[Any]]:
         payload = self._request(
             "/historical/candles",
             {
                 "exchange": "NSE",
-                "segment": "FNO",
+                "segment": segment,
                 "groww_symbol": groww_symbol,
                 "start_time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "end_time": end_time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -202,15 +190,13 @@ class GrowwMarketDataProvider(MarketDataProvider):
             start_time=start,
             end_time=end,
             candle_interval="1day",
+            segment="CASH",
         )
         result: list[tuple[datetime, float]] = []
         for candle in candles:
             if len(candle) < 5:
                 continue
             timestamp = candle[0]
-            if isinstance(timestamp, (int, float)):
-                dt = datetime.fromtimestamp(float(timestamp))
-            else:
-                dt = datetime.fromisoformat(str(timestamp))
+            dt = datetime.fromtimestamp(float(timestamp)) if isinstance(timestamp, (int, float)) else datetime.fromisoformat(str(timestamp))
             result.append((dt, float(candle[4])))
         return sorted(result, key=lambda x: x[0])[-days:]
