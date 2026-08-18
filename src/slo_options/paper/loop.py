@@ -1,3 +1,4 @@
+import json
 import os
 import time
 import uuid
@@ -10,6 +11,7 @@ import pandas as pd
 from slo_options.analytics.volatility import historical_volatility
 from slo_options.data.providers.upstox import UpstoxMarketDataProvider
 from slo_options.paper.ledger import PaperLedger
+from slo_options.risk.position_sizing import calculate_position_size
 from slo_options.strategy.candidate_engine import CandidateEngine
 from slo_options.strategy.direction import calculate_direction
 from slo_options.strategy.selector import Signal, select_trade
@@ -29,6 +31,18 @@ class LivePaperLoop:
         self.ledger = PaperLedger()
         self.output = Path(output)
         self.interval_seconds = int(os.getenv("SLO_PAPER_INTERVAL_SECONDS", "300"))
+        self.paper_capital = float(os.getenv("SLO_PAPER_CAPITAL", "1500000"))
+        self.trade_allocation = float(os.getenv("SLO_PAPER_TRADE_ALLOCATION", "150000"))
+        self.lot_sizes = self._load_lot_sizes()
+
+    @staticmethod
+    def _load_lot_sizes() -> dict[str, int]:
+        raw = os.getenv("SLO_LOT_SIZES", "{}")
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("SLO_LOT_SIZES must be valid JSON") from exc
+        return {str(k): int(v) for k, v in value.items()}
 
     @staticmethod
     def _now_ist() -> datetime:
@@ -55,7 +69,7 @@ class LivePaperLoop:
         chain = self.provider.get_option_chain(symbol)
         by_symbol = {option.symbol: option for option in chain}
 
-        # Manage existing positions during market hours using the bid.
+        # Manage the existing paper position using bid-side exits.
         for trade in list(self.ledger.trades):
             if trade.underlying != symbol or trade.exit_price is not None:
                 continue
@@ -67,12 +81,16 @@ class LivePaperLoop:
             elif quote.bid >= trade.target_price:
                 self.ledger.close(trade.trade_id, quote.bid, "TARGET")
 
-        # Never open a new position outside market hours.
         if not self._is_market_open():
             return
 
-        # Only one open position per underlying in V1.
-        if any(t.underlying == symbol and t.exit_price is None for t in self.ledger.trades):
+        # V1 paper test: only one open trade across the entire portfolio.
+        if any(t.exit_price is None for t in self.ledger.trades):
+            return
+
+        lot_size = self.lot_sizes.get(symbol)
+        if not lot_size:
+            print(f"Skipping {symbol}: no SLO_LOT_SIZES entry configured.")
             return
 
         candidates = self.engine.scan(symbol, direction_score=direction.score, hv=hv)
@@ -87,16 +105,29 @@ class LivePaperLoop:
             entry = quote.ask
             stop = entry * (1.0 - 0.35)
             target = entry * (1.0 + 0.50)
-            trade = self._open_trade(symbol, quote.symbol, entry, stop, target)
+            sizing = calculate_position_size(
+                capital=self.paper_capital,
+                entry_premium=entry,
+                stop_premium=stop,
+                lot_size=lot_size,
+                risk_per_trade_pct=None,
+                max_capital_pct=0.10,
+                allocation_per_trade=self.trade_allocation,
+            )
+            if sizing.quantity <= 0:
+                continue
+
+            trade = self._open_trade(symbol, quote.symbol, sizing.quantity, entry, stop, target)
             print(
                 f"{self._now_ist().isoformat()} PAPER {trade.side} "
-                f"{symbol} {quote.symbol} qty={trade.quantity} entry={entry:.2f} "
-                f"stop={stop:.2f} target={target:.2f} score={score.total_score:.1f}"
+                f"{symbol} {quote.symbol} qty={trade.quantity} lots={sizing.lots} "
+                f"allocation={sizing.premium_capital:.2f} max_stop_loss={sizing.max_loss:.2f} "
+                f"entry={entry:.2f} stop={stop:.2f} target={target:.2f} score={score.total_score:.1f}"
             )
             break
 
     def _close_all_for_eod(self) -> None:
-        """Close all remaining paper positions at the latest bid before/at 15:30 IST."""
+        """Close all remaining paper positions at the latest bid."""
         for trade in list(self.ledger.trades):
             if trade.exit_price is not None:
                 continue
@@ -105,10 +136,9 @@ class LivePaperLoop:
             if quote is not None and quote.bid > 0:
                 self.ledger.close(trade.trade_id, quote.bid, "EOD")
 
-    def _open_trade(self, underlying: str, option_symbol: str, entry: float, stop: float, target: float):
+    def _open_trade(self, underlying: str, option_symbol: str, quantity: int, entry: float, stop: float, target: float):
         from slo_options.paper.ledger import PaperTrade
 
-        quantity = int(os.getenv("SLO_PAPER_DEFAULT_QTY", "1"))
         item = PaperTrade(
             trade_id=uuid.uuid4().hex[:12],
             timestamp=self._now_ist().replace(tzinfo=None),
@@ -124,7 +154,12 @@ class LivePaperLoop:
         return item
 
     def run_forever(self) -> None:
-        print("SLO real-data paper trading started. No broker orders will be placed.")
+        print(
+            "SLO real-data paper trading started. "
+            f"Capital=₹{self.paper_capital:,.0f}, "
+            f"allocation/trade=₹{self.trade_allocation:,.0f}, "
+            "market=09:15-15:30 IST. No broker orders will be placed."
+        )
         while True:
             try:
                 now = self._now_ist()
