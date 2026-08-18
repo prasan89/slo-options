@@ -6,7 +6,7 @@ Systematic Long Options research platform.
 - Long CALL / Long PUT only
 - No option selling
 - NIFTY + BANKNIFTY + liquid F&O stocks
-- Target: research toward an average ₹10K/day objective; no forced daily trading quota
+- Target: research toward an average ₹50K/day objective; no forced daily trading quota
 - Historical validation -> one-month forward paper trading -> small live deployment only after validation
 
 ## Architecture
@@ -35,12 +35,13 @@ Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest 
 - Walk-forward and robustness utilities
 - Paper trading ledger/service/reporting
 - **Real-data paper scan runner**
+- **Real-data paper loop, 09:15-15:30 IST**
 - MCP application facade
 
 ## Real-data setup
-The current real-data adapter uses Upstox REST APIs for the option chain and market quotes. TradingView remains useful for visual analysis, but its official documentation says it does not currently provide a general API for programmatic data access. citeturn965535search1
+The current real-data adapter uses Upstox REST APIs for the option chain and market quotes. TradingView remains useful for visual analysis, but its official documentation says it does not currently provide a general API for programmatic data access.
 
-Create an Upstox developer app and obtain an access token. Upstox uses OAuth 2.0, and its access tokens expire at 3:30 AM the following day. citeturn856176search0turn856176search2
+Create an Upstox developer app and obtain an access token. Upstox uses OAuth 2.0, and its access tokens expire at 3:30 AM the following day.
 
 Copy `.env.example` to `.env` and configure:
 
@@ -50,8 +51,6 @@ UPSTOX_ACCESS_TOKEN=YOUR_TOKEN
 SLO_UNDERLYING_KEYS={"NIFTY":"NSE_INDEX|Nifty 50","BANKNIFTY":"NSE_INDEX|Nifty Bank"}
 SLO_LOT_SIZES={"NIFTY":1,"BANKNIFTY":1}
 ```
-
-The Upstox option-chain endpoint returns expiry, spot, bid/ask, volume, OI and option Greeks including IV, delta, gamma, theta and vega. citeturn965535search2
 
 ## Run a real-data paper scan
 
@@ -67,8 +66,16 @@ slo-paper-scan
 
 The scanner writes `reports/paper_signals.csv` and **does not place any orders**.
 
+## Run continuous paper trading
+
+```bash
+slo-paper-loop
+```
+
+The loop uses real market data but never sends broker orders. It runs only during the NSE market window **09:15-15:30 IST**, does not open new positions after 15:30, and closes remaining paper positions at end of day using the latest available bid.
+
 ## Historical data
-Upstox also exposes expired option contracts and expired historical candles, which gives us a path toward real option-history backtesting. citeturn856176search1turn856176search3turn856176search9
+Upstox also exposes expired option contracts and expired historical candles, which gives us a path toward real option-history backtesting.
 
 ## Local setup
 ```bash
