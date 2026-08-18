@@ -29,6 +29,7 @@ class GrowwMarketDataProvider(MarketDataProvider):
         if not self.access_token:
             raise ValueError("GROWW_ACCESS_TOKEN is required for Groww mode")
         self.underlying_symbols = underlying_symbols or self._load_underlying_symbols()
+        self.underlying_keys = self.underlying_symbols
         self.timeout_seconds = timeout_seconds
         self.session = requests.Session()
         self.session.headers.update({**self.HEADERS, "Authorization": f"Bearer {self.access_token}"})
@@ -72,21 +73,35 @@ class GrowwMarketDataProvider(MarketDataProvider):
         timestamp = datetime.fromtimestamp(float(timestamp_ms) / 1000) if timestamp_ms else datetime.now()
         return Underlying(symbol=symbol, spot=spot, timestamp=timestamp)
 
+    def _nearest_expiry(self, underlying: str) -> datetime:
+        expiries = sorted(self.get_expiries(underlying, year=date.today().year, month=date.today().month))
+        today = date.today()
+        for expiry in expiries:
+            if expiry >= today:
+                return datetime.combine(expiry, datetime.min.time())
+        # Fall through to the next calendar month if this month's list is exhausted.
+        next_month = today.month + 1
+        next_year = today.year
+        if next_month == 13:
+            next_month, next_year = 1, next_year + 1
+        future = sorted(self.get_expiries(underlying, year=next_year, month=next_month))
+        for expiry in future:
+            if expiry >= today:
+                return datetime.combine(expiry, datetime.min.time())
+        raise RuntimeError(f"No future Groww expiry found for {underlying}")
+
     def get_option_chain(
         self,
         underlying: str,
         expiry: datetime | None = None,
     ) -> list[OptionQuote]:
-        if expiry is None:
-            raise ValueError("Groww option-chain requests require an explicit expiry")
+        expiry = expiry or self._nearest_expiry(underlying)
 
         payload = self._request(
             f"/option-chain/exchange/NSE/underlying/{self._underlying_symbol(underlying)}",
             {"expiry_date": expiry.date().isoformat()},
         )
         data = payload.get("payload", {})
-        underlying_ltp = float(data.get("underlying_ltp", 0))
-        _ = underlying_ltp  # kept for future cross-checking against get_underlying
 
         options: list[OptionQuote] = []
         for strike_text, strike_data in (data.get("strikes") or {}).items():
@@ -99,9 +114,9 @@ class GrowwMarketDataProvider(MarketDataProvider):
                 if not trading_symbol:
                     continue
 
-                # The chain endpoint documents LTP/OI/volume/Greeks but not a
-                # bid/ask pair. Fetch the individual quote to obtain execution
-                # prices for realistic paper trading.
+                # The option-chain endpoint documents LTP/OI/volume/Greeks but
+                # not the complete bid/ask pair. Fetch the individual quote for
+                # execution prices used by the paper engine.
                 quote_payload = self._request(
                     "/live-data/quote",
                     {"exchange": "NSE", "segment": "FNO", "trading_symbol": trading_symbol},
@@ -111,11 +126,9 @@ class GrowwMarketDataProvider(MarketDataProvider):
                 bid = float(market.get("bid_price", 0) or 0)
                 ask = float(market.get("offer_price", 0) or 0)
                 ltp = float(contract.get("ltp", market.get("last_price", 0)) or 0)
-                if bid <= 0 and ltp > 0:
-                    bid = ltp
-                if ask <= 0 and ltp > 0:
-                    ask = ltp
                 if bid <= 0 or ask <= 0:
+                    # Do not manufacture a spread from LTP. Realistic paper
+                    # execution requires an actual two-sided quote.
                     continue
 
                 iv = greeks.get("iv")
