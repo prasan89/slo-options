@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from slo_options.analytics.volatility import historical_volatility
-from slo_options.data.providers.upstox import UpstoxMarketDataProvider
+from slo_options.data.providers.factory import build_provider
 from slo_options.paper.ledger import PaperLedger
 from slo_options.risk.position_sizing import calculate_position_size
 from slo_options.strategy.candidate_engine import CandidateEngine
@@ -23,10 +23,10 @@ MARKET_CLOSE = dt_time(15, 30)
 
 
 class LivePaperLoop:
-    """Forward paper-trading loop using real market data and no order placement."""
+    """Forward paper-trading loop using a configured real-data provider."""
 
     def __init__(self, output: str | Path = "reports/paper_trades.csv") -> None:
-        self.provider = UpstoxMarketDataProvider()
+        self.provider = build_provider()
         self.engine = CandidateEngine(self.provider)
         self.ledger = PaperLedger()
         self.output = Path(output)
@@ -69,7 +69,6 @@ class LivePaperLoop:
         chain = self.provider.get_option_chain(symbol)
         by_symbol = {option.symbol: option for option in chain}
 
-        # Manage the existing paper position using bid-side exits.
         for trade in list(self.ledger.trades):
             if trade.underlying != symbol or trade.exit_price is not None:
                 continue
@@ -84,7 +83,6 @@ class LivePaperLoop:
         if not self._is_market_open():
             return
 
-        # V1 paper test: only one open trade across the entire portfolio.
         if any(t.exit_price is None for t in self.ledger.trades):
             return
 
@@ -156,6 +154,7 @@ class LivePaperLoop:
     def run_forever(self) -> None:
         print(
             "SLO real-data paper trading started. "
+            f"Provider={os.getenv('DATA_PROVIDER', 'mock')}, "
             f"Capital=₹{self.paper_capital:,.0f}, "
             f"allocation/trade=₹{self.trade_allocation:,.0f}, "
             "market=09:15-15:30 IST. No broker orders will be placed."
