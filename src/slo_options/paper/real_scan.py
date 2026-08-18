@@ -1,4 +1,3 @@
-import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -6,20 +5,21 @@ from pathlib import Path
 import pandas as pd
 
 from slo_options.analytics.volatility import historical_volatility
-from slo_options.data.providers.upstox import UpstoxMarketDataProvider
+from slo_options.data.providers.factory import build_provider
 from slo_options.strategy.candidate_engine import CandidateEngine
 from slo_options.strategy.direction import calculate_direction
 from slo_options.strategy.selector import select_trade
 
 
 def _lot_sizes() -> dict[str, int]:
+    import json
     raw = os.getenv("SLO_LOT_SIZES", "{}")
     value = json.loads(raw)
     return {str(k): int(v) for k, v in value.items()}
 
 
 def scan_once(output: str | Path = "reports/paper_signals.csv") -> list[dict]:
-    provider = UpstoxMarketDataProvider()
+    provider = build_provider()
     symbols = list(provider.underlying_keys)
     lots = _lot_sizes()
     rows: list[dict] = []
