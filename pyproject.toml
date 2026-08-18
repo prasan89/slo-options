@@ -14,7 +14,8 @@ mcp = ["mcp>=1.0"]
 
 [project.scripts]
 slo-scan = "slo_options.cli:main"
-slo-paper-scan = "slo_options.paper.real_scan:scan_once"
+slo-paper-scan = "slo_options.paper.real_scan:main"
+slo-paper-loop = "slo_options.paper.loop:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
