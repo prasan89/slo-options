@@ -16,8 +16,9 @@ Data Provider -> Normalized Models -> Analytics -> Strategy -> Risk -> Backtest 
 - Mock provider for development
 - **Upstox read-only provider** for real market data
 - **Groww read-only provider** for real market data and historical F&O research
+- **FYERS API v3 read-only provider** for live quotes, option chains and historical underlying candles
 
-Groww's documented APIs provide live quotes, option chains with Greeks, and F&O historical backtesting data through expiry -> contract -> historical-candle APIs. F&O historical data is documented from 2020 onward. citeturn225452view0turn225452view1
+FYERS provides historical data and quotes/market data through its Data API. FYERS documents the History API for OHLCV candles and the Quotes API for real-time quotes; data access is available to FYERS clients with the required app permissions. citeturn0search4turn0search8
 
 ## Current implementation
 - Market/option models
@@ -41,8 +42,39 @@ Groww's documented APIs provide live quotes, option chains with Greeks, and F&O 
 - Paper trading ledger/service/reporting
 - Real-data paper scan runner
 - Real-data paper loop, 09:15-15:30 IST
-- Provider factory for mock/upstox/groww
+- Provider factory for mock/upstox/groww/fyers
 - MCP application facade
+
+## FYERS API v3 setup
+Create a FYERS API app with **Historical Data** and **Quotes & Market Data** permissions. FYERS currently provides historical data and market-data access to clients without a separate datafeed subscription. citeturn0search8turn0search15
+
+Set the FYERS credentials locally:
+
+```bash
+export DATA_PROVIDER=fyers
+export FYERS_APP_ID="YOUR_APP_ID"
+export FYERS_ACCESS_TOKEN="YOUR_ACCESS_TOKEN"
+```
+
+By default the provider knows these index mappings:
+
+```text
+NIFTY     -> NSE:NIFTY50-INDEX
+BANKNIFTY -> NSE:NIFTYBANK-INDEX
+```
+
+For stocks or other underlyings, provide explicit FYERS symbol mappings:
+
+```bash
+export SLO_FYERS_SYMBOLS='{"NIFTY":"NSE:NIFTY50-INDEX","BANKNIFTY":"NSE:NIFTYBANK-INDEX","SUNPHARMA":"NSE:SUNPHARMA-EQ","RELIANCE":"NSE:RELIANCE-EQ"}'
+```
+
+The FYERS provider is **read-only** in SLO Options. It uses API v3 for:
+- underlying LTP/quotes
+- option-chain data
+- daily historical closes
+
+No order-placement API is used by this provider.
 
 ## Upstox real-data setup
 ```bash
